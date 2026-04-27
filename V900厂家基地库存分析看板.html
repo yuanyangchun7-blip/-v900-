@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V900厂家基地库存分析看板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #fff; padding: 20px 30px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 22px; }
+  .header h1 span { color: #f0c040; }
+  .header-badge { background: rgba(255,255,255,0.15); padding: 6px 16px; border-radius: 20px; font-size: 13px; }
+  .legend-bar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 12px 30px; display: flex; gap: 30px; font-size: 13px; color: #666; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+  .dot-green { background: #52c41a; }
+  .dot-red { background: #f5222d; }
+  .legend-note { color: #f5222d; font-weight: 600; }
+  .stats-row { display: flex; gap: 16px; padding: 20px 30px; }
+  .stat-card { flex: 1; background: #fff; border-radius: 10px; padding: 18px 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .stat-card .label { font-size: 13px; color: #999; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; }
+  .stat-card .sub { font-size: 12px; color: #999; margin-top: 4px; }
+  .stat-green .value { color: #52c41a; }
+  .stat-orange .value { color: #fa8c16; }
+  .stat-red .value { color: #f5222d; }
+  .filter-bar { padding: 0 30px 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .filter-btn { padding: 6px 16px; border-radius: 16px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+  .filter-btn:hover, .filter-btn.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+  .version-section { margin: 0 30px 20px; background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+  .version-header { padding: 14px 24px; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+  .version-header:hover { background: #fafafa; }
+  .vh-pro { background: linear-gradient(90deg, #e6f7ff, #f0f5ff); border-left: 4px solid #1890ff; }
+  .vh-max { background: linear-gradient(90deg, #f6ffed, #f0ffe6); border-left: 4px solid #52c41a; }
+  .vh-collector { background: linear-gradient(90deg, #fff7e6, #fffbe6); border-left: 4px solid #fa8c16; }
+  .version-tag { font-size: 12px; padding: 2px 10px; border-radius: 10px; margin-left: 10px; }
+  .tag-available { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+  .tag-partial { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
+  .tag-none { background: #fff1f0; color: #f5222d; border: 1px solid #ffa39e; }
+  .arrow-icon { transition: transform 0.3s; font-size: 12px; color: #999; }
+  .arrow-icon.collapsed { transform: rotate(-90deg); }
+  .color-rows { padding: 0 24px 20px; }
+  .color-row { margin-bottom: 14px; }
+  .color-row-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); }
+  .sku-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .sku-cell { width: 195px; border-radius: 8px; padding: 10px 12px; position: relative; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+  .sku-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .sku-cell.month-deliver { background: #f6ffed; border-color: #b7eb8f; }
+  .sku-cell.order-45d { background: #fff1f0; border-color: #ffa39e; }
+  .sku-status { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; display: inline-block; margin-bottom: 5px; }
+  .status-month { background: #52c41a; color: #fff; }
+  .status-45d { background: #f5222d; color: #fff; }
+  .sku-stock-label { font-size: 11px; margin-bottom: 2px; }
+  .stock-ok { color: #52c41a; }
+  .stock-tight { color: #fa8c16; }
+  .stock-zero { color: #f5222d; }
+  .sku-config { font-size: 12px; color: #333; line-height: 1.5; }
+  .sku-options { font-size: 11px; color: #888; margin-top: 3px; }
+  .opt-badge { display: inline-block; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; margin-right: 3px; font-size: 10px; }
+  .opt-badge-wheel { background: #e6f7ff; color: #1890ff; }
+  .opt-badge-seat { background: #f6ffed; color: #52c41a; }
+  .sku-default-badge { position: absolute; top: 6px; right: 8px; font-size: 10px; color: #aaa; }
+  .modal-mask { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.45); z-index:1000; justify-content:center; align-items:center; }
+  .modal-mask.active { display: flex; }
+  .modal-box { background:#fff; border-radius:14px; width:480px; max-height:80vh; overflow-y:auto; padding:28px; position:relative; }
+  .modal-close { position:absolute; top:14px; right:18px; font-size:22px; cursor:pointer; color:#999; }
+  .modal-close:hover { color:#333; }
+  .modal-title { font-size:18px; font-weight:700; margin-bottom:16px; }
+  .modal-field { display:flex; margin-bottom:10px; }
+  .modal-field .flabel { width:90px; color:#999; font-size:13px; flex-shrink:0; }
+  .modal-field .fvalue { font-size:13px; color:#333; }
+  .modal-deliver { padding:10px 14px; border-radius:8px; margin:14px 0; font-size:13px; }
+  .deliver-quick { background:#f6ffed; border:1px solid #b7eb8f; color:#389e0d; }
+  .deliver-slow { background:#fff1f0; border:1px solid #ffa39e; color:#cf1322; }
+  .modal-script { background:#f9f9f9; border-radius:8px; padding:12px 14px; font-size:12px; color:#555; line-height:1.8; margin-top:12px; }
+  .no-data { text-align:center; padding:40px; color:#bbb; font-size:14px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📦 V900 厂家基地库存分析看板</h1>
+  <div class="header-badge">数据更新：<span id="updateTime">78条记录</span></div>
+</div>
+
+<div class="legend-bar">
+  <div class="legend-item"><div class="legend-dot dot-green"></div> 有库存（充足/紧张/数字） → <b>当月内交付</b></div>
+  <div class="legend-item"><div class="legend-dot dot-red"></div> 0库存 → <b>需预定，45天交付</b></div>
+  <div class="legend-item" style="margin-left:auto; font-size:12px; color:#999;">💡 核心目的：快速成交选"当月交付"，预判下单选"45天"</div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card stat-green"><div class="label">当月可交付SKU</div><div class="value" id="statQuick">53</div><div class="sub">充足+紧张，下单即安排发运</div></div>
+  <div class="stat-card stat-orange"><div class="label">库存紧张SKU（≤2台）</div><div class="value" id="statTight">35</div><div class="sub">有库存但数量少，建议优先推荐</div></div>
+  <div class="stat-card stat-red"><div class="label">需45天预定SKU</div><div class="value" id="stat45d">25</div><div class="sub">0库存，需提前下单排产</div></div>
+</div>
+
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="filterShow('all',this)">全部显示</button>
+  <button class="filter-btn" onclick="filterShow('month',this)">✅ 只看当月可交付</button>
+  <button class="filter-btn" onclick="filterShow('tight',this)">⚠️ 只看库存紧张</button>
+  <button class="filter-btn" onclick="filterShow('45d',this)">🔴 只看需预定(45天)</button>
+</div>
+
+<div id="versionContainer">
+  <div class="version-section" id="sec_pro">
+    <div class="version-header vh-pro" onclick="toggleSection('pro')">
+      <div>1180四驱Pro版 <span class="version-tag tag-partial">部分可当月交付</span></div>
+      <div class="arrow-icon" id="arrow_pro">▼</div>
+    </div>
+    <div class="color-rows" id="rows_pro">
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#8e8e93"></div>星瀚银</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r0')">
+          <div class="sku-default-badge">默认配置</div>
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r4')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a3a6e"></div>深空蓝</div>
+        <div class="sku-row">
+<div class="sku-cell order-45d" onclick="showDetail('r1')">
+          <div class="sku-default-badge">默认配置</div>
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r5')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a1a1a"></div>曜夜黑</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r2')">
+          <div class="sku-default-badge">默认配置</div>
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r6')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#f5f5f0"></div>月曜白</div>
+        <div class="sku-row">
+<div class="sku-cell order-45d" onclick="showDetail('r3')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="version-section" id="sec_max">
+    <div class="version-header vh-max" onclick="toggleSection('max')">
+      <div>1220四驱Max版 <span class="version-tag tag-partial">部分可当月交付</span></div>
+      <div class="arrow-icon" id="arrow_max">▼</div>
+    </div>
+    <div class="color-rows" id="rows_max">
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#8e8e93"></div>星瀚银</div>
+        <div class="sku-row">
+<div class="sku-cell order-45d" onclick="showDetail('r17')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r18')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r21')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r22')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r24')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r26')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r29')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r33')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r37')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r41')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a3a6e"></div>深空蓝</div>
+        <div class="sku-row">
+<div class="sku-cell order-45d" onclick="showDetail('r19')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r20')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r23')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r25')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r27')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r31')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r35')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r39')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r43')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a1a1a"></div>曜夜黑</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r44')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r45')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r46')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r47')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r48')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r49')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r50')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r51')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r52')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#f5f5f0"></div>月曜白</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r9')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r10')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r11')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r12')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r15')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r16')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r30')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r34')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r38')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r42')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">剩3台 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#2d6a4f"></div>极光绿</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r7')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r8')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">剩3台 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r13')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r14')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r28')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r32')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r36')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">剩3台 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r40')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge opt-badge-wheel">20寸轮毂</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="version-section" id="sec_collector">
+    <div class="version-header vh-collector" onclick="toggleSection('collector')">
+      <div>金晖典藏版 <span class="version-tag tag-partial">部分可当月交付</span></div>
+      <div class="arrow-icon" id="arrow_collector">▼</div>
+    </div>
+    <div class="color-rows" id="rows_collector">
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#8e8e93"></div>星瀚银</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r57')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r58')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r62')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r66')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r72')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r75')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a3a6e"></div>深空蓝</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r59')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r60')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r64')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r68')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r73')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩1台 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r77')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#1a1a1a"></div>曜夜黑</div>
+        <div class="sku-row">
+<div class="sku-cell order-45d" onclick="showDetail('r69')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r70')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r71')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">剩3台 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#f5f5f0"></div>月曜白</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r55')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r56')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-ok">库存充足 ✓</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r63')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r67')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r76')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-row-title"><div class="color-dot" style="background:#2d6a4f"></div>极光绿</div>
+        <div class="sku-row">
+<div class="sku-cell month-deliver" onclick="showDetail('r53')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r54')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell order-45d" onclick="showDetail('r61')">
+          
+          <div class="sku-status status-45d">需45天</div>
+          <div class="sku-stock-label stock-zero">0库存</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r65')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">库存紧张 ⚠</div>
+          <div class="sku-config">晨曦米</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">6座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+<div class="sku-cell month-deliver" onclick="showDetail('r74')">
+          
+          <div class="sku-status status-month">当月交付</div>
+          <div class="sku-stock-label stock-tight">剩2台 ⚠</div>
+          <div class="sku-config">霞光橙</div>
+          <div class="sku-options"><span class="opt-badge opt-badge-seat">8座</span><span class="opt-badge">电动踏板</span></div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-mask" id="modal">
+  <div class="modal-box">
+    <div class="modal-close" onclick="closeModal()">×</div>
+    <div class="modal-title" id="mTitle"></div>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<script>
+var inventoryRecords = [
+  { id:'r0', versionId:'pro', versionName:'1180四驱Pro版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:false, stockStatus:'充足', status:'month' },
+  { id:'r1', versionId:'pro', versionName:'1180四驱Pro版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:false, stockStatus:'0', status:'45d' },
+  { id:'r2', versionId:'pro', versionName:'1180四驱Pro版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:false, stockStatus:'充足', status:'month' },
+  { id:'r3', versionId:'pro', versionName:'1180四驱Pro版', colorName:'月曜白', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r4', versionId:'pro', versionName:'1180四驱Pro版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r5', versionId:'pro', versionName:'1180四驱Pro版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r6', versionId:'pro', versionName:'1180四驱Pro版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r7', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r8', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'3', status:'month' },
+  { id:'r9', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r10', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r11', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'晨曦米', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r12', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r13', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'晨曦米', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r14', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'霞光橙', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r15', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'晨曦米', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r16', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'霞光橙', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r17', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r18', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r19', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r20', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r21', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r22', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r23', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r24', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r25', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r26', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r27', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r28', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r29', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r30', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r31', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r32', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r33', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r34', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r35', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r36', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'霞光橙', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'3', status:'month' },
+  { id:'r37', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r38', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'霞光橙', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r39', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r40', versionId:'max', versionName:'1220四驱Max版', colorName:'极光绿', interiodName:'晨曦米', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r41', versionId:'max', versionName:'1220四驱Max版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r42', versionId:'max', versionName:'1220四驱Max版', colorName:'月曜白', interiodName:'晨曦米', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'3', status:'month' },
+  { id:'r43', versionId:'max', versionName:'1220四驱Max版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r44', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r45', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r46', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r47', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r48', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r49', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r50', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r51', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:7, wheel20:true, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r52', versionId:'max', versionName:'1220四驱Max版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:6, wheel20:true, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r53', versionId:'collector', versionName:'金晖典藏版', colorName:'极光绿', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r54', versionId:'collector', versionName:'金晖典藏版', colorName:'极光绿', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r55', versionId:'collector', versionName:'金晖典藏版', colorName:'月曜白', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r56', versionId:'collector', versionName:'金晖典藏版', colorName:'月曜白', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r57', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r58', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r59', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r60', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'充足', status:'month' },
+  { id:'r61', versionId:'collector', versionName:'金晖典藏版', colorName:'极光绿', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r62', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r63', versionId:'collector', versionName:'金晖典藏版', colorName:'月曜白', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r64', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r65', versionId:'collector', versionName:'金晖典藏版', colorName:'极光绿', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r66', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r67', versionId:'collector', versionName:'金晖典藏版', colorName:'月曜白', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r68', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'紧张', status:'month' },
+  { id:'r69', versionId:'collector', versionName:'金晖典藏版', colorName:'曜夜黑', interiodName:'霞光橙', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r70', versionId:'collector', versionName:'金晖典藏版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:7, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r71', versionId:'collector', versionName:'金晖典藏版', colorName:'曜夜黑', interiodName:'晨曦米', seatCount:6, wheel20:false, hasPedal:true, stockStatus:'3', status:'month' },
+  { id:'r72', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'晨曦米', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r73', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'晨曦米', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r74', versionId:'collector', versionName:'金晖典藏版', colorName:'极光绿', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'2', status:'month' },
+  { id:'r75', versionId:'collector', versionName:'金晖典藏版', colorName:'星瀚银', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'1', status:'month' },
+  { id:'r76', versionId:'collector', versionName:'金晖典藏版', colorName:'月曜白', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'0', status:'45d' },
+  { id:'r77', versionId:'collector', versionName:'金晖典藏版', colorName:'深空蓝', interiodName:'霞光橙', seatCount:8, wheel20:false, hasPedal:true, stockStatus:'2', status:'month' },
+];
+
+function getActualWheel(record) {
+  if (record.versionId === 'collector' && record.seatCount === 8) return 18;
+  if (record.wheel20) return 20;
+  if (record.versionId === 'collector') return 20;
+  return 18;
+}
+
+function toggleSection(verId) {
+  var rows = document.getElementById('rows_' + verId);
+  var arrow = document.getElementById('arrow_' + verId);
+  if (rows.style.display === 'none') {
+    rows.style.display = 'block'; arrow.classList.remove('collapsed');
+  } else {
+    rows.style.display = 'none'; arrow.classList.add('collapsed');
+  }
+}
+
+function filterShow(type, btn) {
+  document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.sku-cell').forEach(function(cell){ 
+    var isMonth = cell.classList.contains('month-deliver');
+    var is45d = cell.classList.contains('order-45d');
+    var label = cell.querySelector('.sku-stock-label');
+    var isTight = label && label.classList.contains('stock-tight');
+    var show = true;
+    if (type === 'month') show = isMonth;
+    if (type === 'tight') show = isTight;
+    if (type === '45d') show = is45d;
+    cell.style.display = show ? 'block' : 'none';
+  });
+}
+
+function showDetail(rid) {
+  var r = null;
+  for (var i=0; i<inventoryRecords.length; i++) { if (inventoryRecords[i].id === rid) { r = inventoryRecords[i]; break; } }
+  if (!r) return;
+  var isMonth = r.status !== '45d';
+  var actualWheel = getActualWheel(r);
+  document.getElementById('mTitle').textContent = r.versionName;
+  
+  var deliverHtml = isMonth
+    ? '<div class="modal-deliver deliver-quick">✅ <b>当月内可交付</b>（厂家有库存，发运后即可安排）</div>'
+    : '<div class="modal-deliver deliver-slow">⏰ <b>需45天交付</b>（厂家0库存，需下单后排产发运）</div>';
+  
+  var optionsHtml = '';
+  if (r.seatCount && r.seatCount !== 7) optionsHtml += '<div class="modal-field"><div class="flabel">座位：</div><div class="fvalue">' + r.seatCount + '座（选装）</div></div>';
+  else optionsHtml += '<div class="modal-field"><div class="flabel">座位：</div><div class="fvalue">7座（默认）</div></div>';
+  
+  optionsHtml += '<div class="modal-field"><div class="flabel">轮毂：</div><div class="fvalue">' + actualWheel + '寸';
+  if (actualWheel === 20 && r.versionId !== 'collector') optionsHtml += '（选装20寸）';
+  else if (r.versionId === 'collector' && actualWheel === 18) optionsHtml += '（选装8座降为18寸）';
+  else optionsHtml += '（默认）';
+  optionsHtml += '</div></div>';
+  
+  if (r.hasPedal) optionsHtml += '<div class="modal-field"><div class="flabel">其他：</div><div class="fvalue">电动踏板（选装）</div></div>';
+  
+  var scriptHtml = '';
+  if (isMonth) {
+    scriptHtml = '<div class="modal-script"><strong>💬 销售话术建议：</strong><br>'
+      + '✓ 这款配置厂家有现货，<b>当月就能提车</b>，不用漫长等待<br>'
+      + '✓ 您可以优先考虑这款，早订早享受<br>'
+      + (r.stockType === 'tight' ? '⚠ 注意：这款库存紧张，建议<b>尽快锁定</b>，避免被其他客户先订走' : '')
+      + '</div>';
+  } else {
+    scriptHtml = '<div class="modal-script"><strong>💬 销售话术建议：</strong><br>'
+      + '✓ 这款目前厂家0库存，下单后需要<b>45天左右</b>生产发运<br>'
+      + '✓ 如果您不着急，可以先下单排产，配置更灵活<br>'
+      + '✓ 如果着急用车，我帮您看看<b>同配置其他颜色</b>有没有现货？</div>';
+  }
+  
+  var stockText = r.stockStatus === '充足' ? '🟢 充足' : (r.stockStatus === '紧张' ? '🟡 紧张' : '🔴 0库存');
+  
+  document.getElementById('mBody').innerHTML =
+    deliverHtml
+    + '<div class="modal-field"><div class="flabel">外观颜色：</div><div class="fvalue">' + r.colorName + '</div></div>'
+    + '<div class="modal-field"><div class="flabel">内饰颜色：</div><div class="fvalue">' + (r.interiodName||'—') + '</div></div>'
+    + optionsHtml
+    + '<div class="modal-field"><div class="flabel">库存状态：</div><div class="fvalue">' + stockText + '</div></div>'
+    + scriptHtml;
+  
+  document.getElementById('modal').classList.add('active');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('active'); }
+document.getElementById('modal').addEventListener('click', function(e){ if(e.target===this) closeModal(); });
+</script>
+</body>
+</html>
